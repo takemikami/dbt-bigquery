@@ -57,6 +57,7 @@ from dbt.adapters.bigquery.relation_configs import (
     PartitionConfig,
 )
 from dbt.adapters.bigquery.utility import sql_escape
+from dbt.adapters.bigquery.connections import BigQueryConnectionMethod
 
 
 logger = AdapterLogger("BigQuery")
@@ -310,6 +311,12 @@ class BigQueryAdapter(BaseAdapter):
         relation = relation.without_identifier()  # type: ignore
 
         fire_event(SchemaCreation(relation=_make_ref_key_dict(relation)))
+        if self.is_emulator:
+            database = relation.database
+            schema = relation.schema
+            self.connections.create_dataset(database, schema)
+            return
+
         kwargs = {
             "relation": relation,
         }
@@ -966,3 +973,10 @@ class BigQueryAdapter(BaseAdapter):
         :param str sql: The sql to validate
         """
         return self.connections.dry_run(sql)
+
+    @available
+    def is_emulator(self) -> bool:
+        conn = self.connections.get_thread_connection()
+        if conn.credentials.method == BigQueryConnectionMethod.EMULATOR:
+            return True
+        return False

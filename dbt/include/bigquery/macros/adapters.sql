@@ -10,6 +10,14 @@
     {%- set table_dest_columns_csv = columns_without_partition_fields_csv(partition_config, columns) -%}
     {%- set columns = '(' ~ table_dest_columns_csv ~ ')' -%}
     {%- endif -%}
+    {%- if adapter.is_emulator() -%}
+      {%- for table in adapter.list_relations_without_caching(relation) -%}
+        {%- if relation.identifier == table.identifier -%}
+          {% do run_query(bigquery__drop_table(relation)) %}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+
 
     {{ sql_header if sql_header is not none }}
 
@@ -23,10 +31,12 @@
         {#-- cannot do contracts at the same time as time ingestion partitioning -#}
         {{ columns }}
       {% endif %}
+    {%- if not adapter.is_emulator() -%}
     {{ partition_by(partition_config) }}
     {{ cluster_by(raw_cluster_by) }}
 
     {{ bigquery_table_options(config, model, temporary) }}
+    {%- endif -%}
 
     {#-- PARTITION BY cannot be used with the AS query_statement clause.
          https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#partition_expression
@@ -59,6 +69,13 @@
 
 {% macro bigquery__create_view_as(relation, sql) -%}
   {%- set sql_header = config.get('sql_header', none) -%}
+  {%- if adapter.is_emulator() -%}
+    {%- for table in adapter.list_relations_without_caching(relation) -%}
+      {%- if relation.identifier == table.identifier -%}
+        {% do run_query(bigquery__drop_view(relation)) %}
+      {%- endif -%}
+    {%- endfor -%}
+  {%- endif -%}
 
   {{ sql_header if sql_header is not none }}
 
